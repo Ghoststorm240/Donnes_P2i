@@ -115,27 +115,35 @@ def ajout_mesure(jour, liste_valeur:list, type:str, ouvrier:int):
         json.dump(data, file, indent=4)
 
 # Import des données
+def import_donnees(id_presation):
+    creation_json()
+    connexion_bd = ouvrir_connexion_bd()
+    cursor = connexion_bd.cursor()
+    cursor.execute("SELECT * "
+                   "FROM Ouvrier, Prestation "
+                   "WHERE idPrestation = %s "
+                   "AND Ouvrier.idEntreprise = Prestation.idEntreprise ", (id_presation))
+    for i in range(len(cursor)):
+        ajout_ouvrier(cursor[i][1], cursor[i][2], cursor[i][3], cursor[i][0])
+        id_ouvrier = cursor[i][0]
+        # /!\ est ce que ça passe pour le type de capteur
+        cursor.execute("SELECT Mesure.dateMesure, Mesure.valeur, AppartientA.localisation "
+                       "FROM Mesure, AppartientA, Panople, MobilisePour, Entreprise, Porte, Ouvrier "
+                       "WHERE idOuvrier = %s "
+                       "AND idPrestation = %s "
+                       "AND AppartientA.idCapteur = Capteur.idCapteur "
+                       "AND AppartientA.idPanople = Porte.idPanople "
+                       "AND AppartientA.idPanople = MobilisePour.idPanople "
+                       "AND MobilisePour.idPrestation = Prestation.idPrestation "
+                       "AND Porte.idOuvrier = Ouvrier.idOuvrier ", (id_ouvrier, id_presation))
+        mesures = {}
+        for j in range(len(cursor)):
+            if cursor[j][2] not in mesures:
+                mesures[cursor[j][2]] = []
+            jour, heure = cursor[j][0].split()
+            mesures[cursor[j][2]].append((heure, cursor[j][1]))
+        for type_mesure in mesures.keys():
+            liste_valeur = mesures[type_mesure]
+            ajout_mesure(jour, liste_valeur, type_mesure, id_ouvrier)
 
-creation_json()
-connexion_bd = ouvrir_connexion_bd()
-cursor = connexion_bd.cursor()
-cursor.execute("SELECT * FROM Ouvrier")
-for i in range(len(cursor)):
-    ajout_ouvrier(cursor[i][1], cursor[i][2], cursor[i][3], cursor[i][0])
-    id_ouvrier = cursor[i][0]
-    # /!\ est ce que ça passe pour le type de capteur
-    cursor.execute("SELECT Mesure.dateMesure, Mesure.valeur, AppartientA.localisation "
-                   "FROM Mesure, AppartientA "
-                   "WHERE idOuvrier = %s "
-                   "AND AppartientA.idCapteur = Capteur.idCapteur", (id_ouvrier))
-    mesures = {}
-    for j in range(len(cursor)):
-        if cursor[j][2] not in mesures:
-            mesures[cursor[j][2]] = []
-        jour, heure = cursor[j][0].split()
-        mesures[cursor[j][2]].append((heure, cursor[j][1]))
-    for type_mesure in mesures.keys():
-        liste_valeur = mesures[type_mesure]
-        ajout_mesure(jour, liste_valeur, type_mesure, id_ouvrier)
-
-fermer_connexion_bd(connexion_bd)
+    fermer_connexion_bd(connexion_bd)
