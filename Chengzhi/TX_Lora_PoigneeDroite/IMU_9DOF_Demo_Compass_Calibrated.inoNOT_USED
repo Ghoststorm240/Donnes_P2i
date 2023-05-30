@@ -1,0 +1,71 @@
+#include "Wire.h"
+// I2Cdev and MPU9250 must be installed as libraries, or else the .cpp/.h files
+// for both classes must be in the include path of your project
+#include "I2Cdev.h"
+#include "MPU9250.h"
+#include <string>
+#include <bitset>
+// class default I2C address is 0x68
+// specific I2C addresses may be passed as a parameter here
+// AD0 low = 0x68 (default for InvenSense evaluation board)
+// AD0 high = 0x69
+using namespace std;
+MPU9250 accelgyro;
+I2Cdev   I2C_M;
+
+uint8_t buffer_m[7];
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
+int16_t mx, my, mz;
+
+int8_t Axyz[3];
+int8_t Gxyz[3];
+int8_t component_z;
+int8_t anticlockwise_z;
+
+void setup() {
+  Wire.begin();
+  Serial.begin(38400);
+  accelgyro.initialize();
+  accelgyro.testConnection();
+	delay(1000);
+}
+
+void loop(){   
+	getAccel_Data();
+	getGyro_Data();
+	getCompass_Data();  
+
+  byte byteArr[]={Axyz[0]&0xFF,Axyz[1]&0xFF,Axyz[2]&0xFF,Gxyz[0]&0xFF,Gxyz[1]&0xFF,Gxyz[2]&0xFF,component_z&0xFF,anticlockwise_z&0xFF};
+	//Serial.println((char)byteArr[2]); 
+  
+	delay(150);
+}
+
+void getAccel_Data(void){
+  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+  Axyz[0] = (int8_t) ((double)ax / 256);//16384  LSB/g
+  Axyz[1] = (int8_t) ((double)ay / 256);
+  Axyz[2] = (int8_t) ((double)az / 256); 
+}
+
+void getGyro_Data(void){
+  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+  Gxyz[0] = (int8_t) ((double)gx / 256); //131 LSB(��/s)
+  Gxyz[1] = (int8_t) ((double)gy / 256); 
+  Gxyz[2] = (int8_t) ((double)gz / 256); 
+}
+
+void getCompass_Data(void){
+	I2C_M.writeByte(MPU9150_RA_MAG_ADDRESS, 0x0A, 0x01); //enable the magnetometer
+	delay(10);
+	I2C_M.readBytes(MPU9150_RA_MAG_ADDRESS, MPU9150_RA_MAG_XOUT_L, 6, buffer_m);
+  mx = ((int16_t)(buffer_m[1]) << 8) | buffer_m[0];
+	my = ((int16_t)(buffer_m[3]) << 8) | buffer_m[2];
+	mz = ((int16_t)(buffer_m[5]) << 8) | buffer_m[4];	
+  mx-=31; //calibration
+  my-=27;
+  mz+=58;
+  anticlockwise_z = (int8_t) (atan2(my,mx)*40);
+	component_z = (int8_t) (mz/sqrt(mx*mx+my*my+mz*mz)*127);
+}
